@@ -1,0 +1,371 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "fullTextIndex", "referentialIntegrity"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum PoStatus {
+  PENDING
+  RETURNED
+}
+
+enum Reason {
+  OVERSTOCKING
+  EXPIRED
+  BAD_ORDER
+  OTHERS
+  KITCHEN_SUPPLY
+  STOCK_TRANSFER
+}
+
+enum ItemStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+
+}
+
+enum ItemConditions {
+  EXPIRED
+  GOOD
+}
+
+enum InvoiceStatus {
+  IN_PROGRESS
+  READY
+  VOID
+  REQUESTING_TO_OTHER_BRANCH
+}
+
+enum InvoicePaymentStatus { 
+  PENDING
+  PAID
+}
+
+enum Remark {
+  EXPIRED
+  GOOD
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  username    String @unique
+  password    String
+  roles       Role[]
+  employee    Employee @relation(fields: [employee_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  employee_id Int      @unique
+}
+
+model Role {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  permissions Permission[]
+  users       User[]
+}
+
+model Permission {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  roles Role[]
+}
+
+model Item {
+  id                  Int               @id @default(autoincrement())
+  name                String            @unique
+  qty                 Int @default(0)
+  desc                String            @default("N/A")
+  status              ItemStatus?
+  cost_price               Decimal           @db.Decimal(19, 2) @default(0)
+  selling_price               Decimal           @db.Decimal(19, 2) @default(0)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  stock_alert_ctr     Int
+  company             Company?          @relation(fields: [company_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  company_id          Int?
+  storage_location    Storage_location? @relation(fields: [storage_location_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  storage_location_id Int?
+  brand               Brands?           @relation(fields: [brand_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  brand_id            Int?
+  category            Category?         @relation(fields: [category_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  category_id         Int?
+  item_transactions         ItemTransaction[]
+
+}
+
+model Company {
+  id             Int             @id @default(autoincrement())
+  name           String          @unique
+  address        String
+  phone          String
+  representative Representative?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  items          Item[]
+}
+
+model Representative {
+  id         Int      @id @default(autoincrement())
+  fname      String
+  lname      String
+  mname      String
+  phone      String
+  address    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  company    Company  @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  company_id Int      @unique
+
+}
+
+model Storage_location {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  address   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items     Item[]
+  po_requests     PO_Request[]
+}
+
+model Brands {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items     Item[]
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items     Item[]
+}
+
+model PO_Request {
+  id           Int      @id @default(autoincrement())
+  remarks      String?
+  reason       Reason
+  status       PoStatus @default(RETURNED)
+  qty          Int
+  item_transaction         ItemTransaction     @relation(fields: [item_transaction_id], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  item_transaction_id      Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  request_no   String @unique
+  attendant    Employee @relation("po_request_as_attendant", fields: [attendant_id], references: [id])
+  attendant_id Int
+  storage_location    Storage_location @relation(fields: [storage_location_id], references: [id])
+  storage_location_id Int
+}
+
+model Employee {
+  id                      Int          @id @default(autoincrement())
+  fname                   String
+  lname                   String
+  mname                   String
+  phone                   String
+  address                 String
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  position                Position      @relation(fields: [position_id], references: [id])
+  position_id             Int
+  po_request_as_attendant PO_Request[]  @relation("po_request_as_attendant")
+  user                    User?
+  transaction             Transaction[]
+  branch                  Branch?         @relation(fields: [branch_id], references: [id],onDelete: Cascade)
+  branch_id               Int?
+}
+
+model Position {
+  id                      Int           @id @default(autoincrement())
+  name                    String        @unique
+  Employees               Employee[]
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+}
+
+model Transaction{
+  id                      Int            @id @default(autoincrement())
+  transaction_code        String
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  employee                Employee       @relation(fields: [employee_id], references: [id])
+  employee_id             Int
+  customer                Customer?     @relation(fields: [customer_id], references: [id])
+  customer_id             Int?  
+  invoice                   Invoice          @relation(fields: [invoice_id], references: [id])
+  invoice_id                Int         @unique
+  price               Decimal           @db.Decimal(19, 2)
+  cash               Decimal           @db.Decimal(19, 2)
+  change               Decimal           @db.Decimal(19, 2)
+  branch   Branch?  @relation(fields: [branch_id], references: [id],onDelete: Cascade)
+  branch_id  Int?
+}
+
+model Customer{
+  id                      Int            @id @default(autoincrement())
+  fname                   String?        
+  lname                   String?        
+  mname                   String?        
+  phone                   String?        
+  address                 String?        
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  transaction             Transaction[]
+  invoices                   Invoice[]
+
+}
+
+model Order{
+  id                  Int               @id @default(autoincrement())
+  qty                 Int
+  price               Decimal           @db.Decimal(19, 2)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  menu_item           MenuItem          @relation(fields: [menu_item_id], references: [id])
+  menu_item_id        Int
+ 
+  invoice           Invoice?          @relation(fields: [invoice_id], references: [id])
+  invoice_id        Int?
+
+
+}
+
+model MenuItem{
+  id                   Int              @id @default(autoincrement())
+  name                 String           
+  cost_price               Decimal           @db.Decimal(19, 2) @default(0)
+  selling_price               Decimal           @db.Decimal(19, 2) @default(0)
+  qty                  Int
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  image_url            String?
+  // relation
+  desc                String            @default("N/A")
+  expiry_date         DateTime?
+  orders                Order[]
+  menu_item_category            MenuItemCategory?         @relation(fields: [menu_item_category_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  menu_item_category_id         Int?
+  menu_item_stock      MenuItemStock[]
+  branch                  Branch?         @relation(fields: [branch_id], references: [id],onDelete: Cascade)
+  branch_id               Int?
+  pull_out            PullOut?         @relation(fields: [pull_out_id], references: [id],onDelete: Cascade)
+  pull_out_id           Int?    @unique
+}
+
+model MenuItemStock{
+  id                  Int              @id @default(autoincrement())
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  menu_item           MenuItem         @relation(fields: [menu_item_id], references: [id],onDelete: Cascade)
+  menu_item_id        Int
+  qty                 Int
+  expiry_date         DateTime?
+}
+
+model MenuItemCategory{
+  id                      Int           @id @default(autoincrement())
+  name                    String        @unique
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  menu_item                MenuItem[]
+  branch   Branch?  @relation(fields: [branch_id], references: [id],onDelete: Cascade)
+  branch_id  Int?
+}
+
+model ItemTransaction{
+  id                   Int              @id @default(autoincrement())
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  item  Item  @relation(fields: [item_id], references: [id], onDelete: Cascade)
+  item_id   Int
+  qty                 Int
+  expiry_date         DateTime
+  date_received       DateTime
+  condition           ItemConditions    @default(GOOD)
+  po_requests         PO_Request[]
+
+}
+
+model Table{
+  id                   Int              @id @default(autoincrement())
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  capacity Int
+  name String @unique
+  desc String?
+}
+
+model Invoice{
+  id                   Int              @id @default(autoincrement())
+  orders                Order[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  status InvoiceStatus @default(IN_PROGRESS)
+  payment_status InvoicePaymentStatus @default(PENDING)
+  transaction         Transaction[]
+  customer            Customer?          @relation(fields: [customer_id], references: [id])
+  customer_id         Int?
+  branch                  Branch?         @relation(fields: [branch_id], references: [id],onDelete: Cascade)
+  branch_id           Int?
+  request_to_branch String
+  request_to_branch_NAME String? @default("customer")
+  link_invoice Int? @default(0)
+
+}
+
+
+model Branch {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  address   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  employees     Employee[]
+  menu_item MenuItem[]
+  equipment_items Equipment[]
+  invoices  Invoice[]
+  category MenuItemCategory[]
+  transaction Transaction[]
+}
+
+model Equipment{
+  id                   Int              @id @default(autoincrement())
+  name                 String           @unique
+  cost_price               Decimal           @db.Decimal(19, 2) @default(0)
+  selling_price               Decimal           @db.Decimal(19, 2) @default(0)
+  qty                  Int
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  image_url            String?
+  remark               Remark    @default(GOOD)
+  // relation
+  equipment_category            EquipmentCategory?         @relation(fields: [equipment_category_id], references: [id], onDelete: SetNull, onUpdate: SetNull)
+  equipment_category_id         Int?
+  branch                  Branch?         @relation(fields: [branch_id], references: [id],onDelete: Cascade)
+  branch_id           Int?
+}
+
+model EquipmentCategory{
+  id                      Int           @id @default(autoincrement())
+  name                    String        @unique
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  equipment               Equipment[]
+}
+
+model PullOut{
+  id                      Int           @id @default(autoincrement())
+  menu_item               MenuItem?      
+  reason                  String?
+  qty                     Int
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+}
